@@ -1,0 +1,1 @@
+tcpclient\tcpclient b2ki.science.uu.nl 2081 MyBot.exe username password
