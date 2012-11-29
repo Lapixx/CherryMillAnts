@@ -1,1 +1,1 @@
-tcpclient\tcpclient b2ki.science.uu.nl 2081 MyBot.exe username password
+tcpclient\tcpclient b2ki.science.uu.nl 2081 CherryMillAnt\bin\Debug\CherryMillAnt.exe 3855473 CherryMillAnt
