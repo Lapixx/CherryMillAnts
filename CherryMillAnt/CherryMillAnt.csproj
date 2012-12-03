@@ -41,6 +41,7 @@
     <Compile Include="IGameState.cs" />
     <Compile Include="Location.cs" />
     <Compile Include="MyBot.cs" />
+    <Compile Include="Pathfinding.cs" />
     <Compile Include="Tile.cs" />
   </ItemGroup>
   <ItemGroup>

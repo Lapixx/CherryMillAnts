@@ -4,8 +4,8 @@ namespace Ants {
 
 	public enum Direction {
 		North,
-		South,
 		East,
+        South,
 		West
 	}
 
@@ -30,5 +30,10 @@ namespace Ants {
 					throw new ArgumentException ("Unknown direction", "self");
 			}
 		}
+
+        public static Direction Rotate(Direction dir, int rotate)
+        {
+            return (Direction)(((int)dir + rotate + 4) % 4);
+        }
 	}
 }

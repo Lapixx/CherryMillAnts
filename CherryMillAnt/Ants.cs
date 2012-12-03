@@ -17,6 +17,13 @@ namespace Ants {
 			{ Direction.South, South},
 			{ Direction.West, West}
 		};
+
+        public static IDictionary<Location, Direction> RevAim = new Dictionary<Location, Direction> {
+            { North, Direction.North},
+            { East, Direction.East},
+            { South, Direction.South},
+            { West, Direction.West}
+        };
 		
 		private const string READY = "ready";
 		private const string GO = "go";

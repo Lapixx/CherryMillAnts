@@ -46,6 +46,26 @@ namespace Ants {
 				return (this.Row * 397) ^ this.Col;
 			}
 		}
+
+        public static Location operator +(Location left, Location right)
+        {
+            return new Location(left.Row + right.Row, left.Col + right.Col);
+        }
+
+        public static Location operator -(Location left, Location right)
+        {
+            return new Location(left.Row - right.Row, left.Col - right.Col);
+        }
+
+        public static Location operator *(int left, Location right)
+        {
+            return new Location(left * right.Row, left * right.Col);
+        }
+
+        public static Location operator %(Location left, Location right)
+        {
+            return new Location((left.Row + right.Row) % right.Row, (left.Col + right.Col) % right.Col);
+        }
 	}
 
 	public class TeamLocation : Location, IEquatable<TeamLocation> {

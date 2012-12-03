@@ -1,54 +1,57 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 
-namespace Ants {
-
-	class MyBot : Bot {
+namespace Ants
+{
+	class MyBot : Bot
+    {
+        Random random;
+        List<Location> myHills;
+        int viewRadius;
+        Dictionary<Location, CurrentTask> currentTasks;
+        Dictionary<Location, CurrentTask> nextTasks;
 
 		// DoTurn is run once per turn
-		public override void DoTurn (IGameState state) {
-
+		public override void DoTurn (IGameState state)
+        {
             Console.WriteLine("{0} ants", state.MyAnts.Count);
 
-            HashSet<Ant> inUse = new HashSet<Ant>();
-            HashSet<Location> shallBeOccupied = new HashSet<Location>();
-            
-            foreach (Location l in state.FoodTiles)
+            if (myHills == null)
             {
-                Ant mostCloseAnt = null;
-                int mostCloseDist = int.MaxValue;
-                int dist;
-                foreach(Ant a in state.MyAnts){
-                    dist = state.GetDistance(a, l);
-                    if (dist < mostCloseDist)
-                    {
-                        mostCloseDist = dist;
-                        mostCloseAnt = a;
-                    }
-                }
-                Direction dir = ((List<Direction>) state.GetDirections(mostCloseAnt, l))[0];
-                Location newLoc = state.GetDestination(mostCloseAnt, dir);
-                if(state.GetIsPassable(newLoc) && !shallBeOccupied.Contains(newLoc))
-                {
-                    shallBeOccupied.Add(newLoc);
-                    inUse.Add(mostCloseAnt);
-                    IssueOrder(mostCloseAnt, dir);
-                }
+                random = new Random();
+                currentTasks = new Dictionary<Location, CurrentTask>();
+                nextTasks = new Dictionary<Location, CurrentTask>();
+                myHills = new List<Location>(state.MyHills);
+                viewRadius = (int)Math.Sqrt(state.ViewRadius2);
             }
 
+            currentTasks = nextTasks;
+            nextTasks = new Dictionary<Location, CurrentTask>();
             foreach (Ant a in state.MyAnts)
             {
-                if (inUse.Contains(a))
+                if (!currentTasks.ContainsKey(a))
+                    currentTasks.Add(a, new CurrentTask(Task.Roaming, ((Location)a + 1 * Ants.Aim[(Direction)random.Next(4)]) % new Location(state.Height, state.Width)));
+
+                CurrentTask task = currentTasks[a];
+                Location next = Pathfinding.FindNextLocation(a, task.dest, state);
+                Direction dir;
+                if (next == null)
                     continue;
-                foreach (Direction d in Ants.Aim.Keys)
+                if (state.GetDistance(a, next) == 1)
+                    dir = Ants.RevAim[next - (Location)a];
+                else if (next.Row > a.Row)
+                    dir = Direction.North;
+                else if (next.Row < a.Row)
+                    dir = Direction.South;
+                else if (next.Col > a.Col)
+                    dir = Direction.West;
+                else
+                    dir = Direction.East;
+                if (!nextTasks.ContainsKey(next))
                 {
-                    Location newLoc = state.GetDestination(a, d);
-                    if (state.GetIsPassable(newLoc) && !shallBeOccupied.Contains(newLoc))
-                    {
-                        shallBeOccupied.Add(newLoc);
-                        IssueOrder(a, d);
-                        break;
-                    }
+                    IssueOrder(a, dir);
+                    nextTasks.Add(next, task);
                 }
             }
 
@@ -75,13 +78,27 @@ namespace Ants {
 				if (state.TimeRemaining < 10) break;
 			}
 		*/
-	
-		}
-		
-		public static void Main (string[] args) {
-			new Ants().PlayGame(new MyBot());
 		}
 
+        public enum Task { Roaming, Dinner };
+
+        public class CurrentTask
+        {
+            public Location dest;
+            public Location food;
+            public Task task;
+
+            public CurrentTask(Task task, Location dest, Location food = null)
+            {
+                this.task = task;
+                this.dest = dest;
+                this.food = food;
+            }
+        }
+		
+		public static void Main (string[] args)
+        {
+            new Ants().PlayGame(new MyBot());
+		}
 	}
-	
 }
