@@ -6,7 +6,6 @@ public static class Pathfinding
 {
     public static Location FindNextLocation(Location start, Location dest, IGameState state)
     {
-        return dest;
         List<Location> list = FindPath(start, dest, state);
         if (list != null)
             return list[0];
@@ -19,19 +18,21 @@ public static class Pathfinding
     {
         List<PathfindNode> open = new List<PathfindNode>();
         List<PathfindNode> closed = new List<PathfindNode>();
-
+        List<Location> reachable;
         // Starting node
-        PathfindNode first = new PathfindNode(start);
+        PathfindNode first = new PathfindNode(start, null, dest, state);
+        /*
         closed.Add(first);
 
         // Add all reachable tiles to the Open list.
-        List<Location> reachable = GetNeighbours(first.Position, state);
+
         foreach (Location next in reachable)
         {
             if (state.GetIsPassable(next)) // Check if tile is free
                 open.Add(new PathfindNode(next, first, dest));
         }
-
+        */
+        open.Add(first);
         // Repeat until the destination node is reached
         PathfindNode last = null;
         while (open.Count > 0)
@@ -52,7 +53,7 @@ public static class Pathfinding
             open.Remove(best);
             closed.Add(best);
 
-            if (best.Position == dest) // Destination added to closed list - almost done!
+            if (Location.Equals(best.Position, dest)) // Destination added to closed list - almost done!
             {
                 last = best;
                 break;
@@ -69,7 +70,7 @@ public static class Pathfinding
                 bool cont = false;
                 foreach (PathfindNode n in closed)
                 {
-                    if (n.Position == next)
+                    if (Location.Equals(n.Position, next))
                     {
                         cont = true;
                         break;
@@ -83,7 +84,7 @@ public static class Pathfinding
                 PathfindNode inOpen = null;
                 foreach (PathfindNode n in open)
                 {
-                    if (n.Position == next)
+                    if (Location.Equals(n.Position, next))
                     {
                         inOpen = n;
                         break;
@@ -99,11 +100,12 @@ public static class Pathfinding
                 }
                 else // Add tile to open list
                 {
-                    open.Add(new PathfindNode(next, best, dest));
+                    open.Add(new PathfindNode(next, best, dest, state));
                 }
             }
         }
-
+        if (last == null || last == first)//(!Location.Equals(last.Position, dest))
+            return null;
         // Trace the route from destination to start (using each node's parent property)
         List<PathfindNode> route = new List<PathfindNode>();
         while (last != first && last != null)
@@ -111,9 +113,6 @@ public static class Pathfinding
             route.Add(last);
             last = last.Parent;
         }
-
-        if (last != first)
-            return null;
 
         // Reverse route and convert to Points
         List<Location> path = new List<Location>();
@@ -129,10 +128,10 @@ public static class Pathfinding
     static List<Location> GetNeighbours(Location loc, IGameState state)
     {
         List<Location> neighbours = new List<Location>();
-        neighbours.Add(new Location((loc.Row + 1) % state.Height, loc.Col));
-        neighbours.Add(new Location((loc.Row - 1 + state.Height) % state.Height, loc.Col));
-        neighbours.Add(new Location(loc.Row, (loc.Col + 1) % state.Width));
-        neighbours.Add(new Location(loc.Row, (loc.Col - 1 + state.Width) % state.Width));
+        neighbours.Add(state.GetDestination(loc, Direction.North));
+        neighbours.Add(state.GetDestination(loc, Direction.South));
+        neighbours.Add(state.GetDestination(loc, Direction.East));
+        neighbours.Add(state.GetDestination(loc, Direction.West));
         return neighbours;
     }
 }
@@ -163,15 +162,10 @@ class PathfindNode
         }
     }
 
-    public PathfindNode(Location position)
-    {
-        this.Position = position;
-    }
-
-    public PathfindNode(Location position, PathfindNode parent, Location destination)
+    public PathfindNode(Location position, PathfindNode parent, Location destination, IGameState state)
     {
         this.Position = position;
         this.Parent = parent;
-        this.H = Math.Abs(position.Col - destination.Col) + Math.Abs(position.Row - destination.Row); // Estimate distance with Manhattan method
+        this.H = state.GetDistance(position, destination);
     }
 }

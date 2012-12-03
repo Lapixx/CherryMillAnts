@@ -9,9 +9,10 @@ namespace Ants
         Random random;
         List<Location> myHills;
         int viewRadius;
-        Dictionary<Location, CurrentTask> currentTasks;
-        Dictionary<Location, CurrentTask> nextTasks;
-
+        Dictionary<string, CurrentTask> currentTasks;
+        Dictionary<string, CurrentTask> nextTasks;
+        Stack<Location> locations = new Stack<Location>();
+        Location ant;
 		// DoTurn is run once per turn
 		public override void DoTurn (IGameState state)
         {
@@ -20,38 +21,44 @@ namespace Ants
             if (myHills == null)
             {
                 random = new Random();
-                currentTasks = new Dictionary<Location, CurrentTask>();
-                nextTasks = new Dictionary<Location, CurrentTask>();
+                currentTasks = new Dictionary<string, CurrentTask>();
+                nextTasks = new Dictionary<string, CurrentTask>();
                 myHills = new List<Location>(state.MyHills);
                 viewRadius = (int)Math.Sqrt(state.ViewRadius2);
+                locations.Push(new Location(38, 21));
+                locations.Push(new Location(6, 9));
+                locations.Push(new Location(38, 3));
+                locations.Push(new Location(38, 51));
+                locations.Push(new Location(6, 66));
+                locations.Push(new Location(67, 15));
+                ant = state.MyAnts[0];
             }
 
             currentTasks = nextTasks;
-            nextTasks = new Dictionary<Location, CurrentTask>();
+            nextTasks = new Dictionary<string, CurrentTask>();
             foreach (Ant a in state.MyAnts)
             {
-                if (!currentTasks.ContainsKey(a))
-                    currentTasks.Add(a, new CurrentTask(Task.Roaming, ((Location)a + 1 * Ants.Aim[(Direction)random.Next(4)]) % new Location(state.Height, state.Width)));
+                string key = LocationToKey(a);
+                if (!currentTasks.ContainsKey(key))
+                    currentTasks.Add(key, new CurrentTask(Task.Roaming, a));
 
-                CurrentTask task = currentTasks[a];
+                CurrentTask task = currentTasks[key];
+                while (Location.Equals(task.dest, a) || !state.GetIsPassable(task.dest))
+                    task.dest = GetNewRandomDestination(a, state);
+
                 Location next = Pathfinding.FindNextLocation(a, task.dest, state);
                 Direction dir;
                 if (next == null)
                     continue;
-                if (state.GetDistance(a, next) == 1)
-                    dir = Ants.RevAim[next - (Location)a];
-                else if (next.Row > a.Row)
-                    dir = Direction.North;
-                else if (next.Row < a.Row)
-                    dir = Direction.South;
-                else if (next.Col > a.Col)
-                    dir = Direction.West;
-                else
-                    dir = Direction.East;
-                if (!nextTasks.ContainsKey(next))
+                //if (Location.Equals(a, next))
+                //    continue;
+                dir = ((List<Direction>)state.GetDirections(a, next))[0];
+                string key2 = LocationToKey(next);
+                if (!nextTasks.ContainsKey(key2))
                 {
                     IssueOrder(a, dir);
-                    nextTasks.Add(next, task);
+                    nextTasks.Add(key2, task);
+                    ant = next;
                 }
             }
 
@@ -80,25 +87,36 @@ namespace Ants
 		*/
 		}
 
-        public enum Task { Roaming, Dinner };
-
-        public class CurrentTask
+        public Location GetNewRandomDestination(Location loc, IGameState state)
         {
-            public Location dest;
-            public Location food;
-            public Task task;
-
-            public CurrentTask(Task task, Location dest, Location food = null)
-            {
-                this.task = task;
-                this.dest = dest;
-                this.food = food;
-            }
+            //return locations.Pop();
+            return (loc + 10 * Ants.Aim[(Direction)random.Next(4)]) % new Location(state.Height, state.Width);
         }
-		
+
+        public string LocationToKey(Location location)
+        {
+            return location.Row + "," + location.Col;
+        }
+
 		public static void Main (string[] args)
         {
             new Ants().PlayGame(new MyBot());
 		}
 	}
+
+    public enum Task { Roaming, Dinner };
+
+    public class CurrentTask
+    {
+        public Location dest;
+        public Location food;
+        public Task task;
+
+        public CurrentTask(Task task, Location dest, Location food = null)
+        {
+            this.task = task;
+            this.dest = dest;
+            this.food = food;
+        }
+    }
 }
