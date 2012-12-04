@@ -4,9 +4,16 @@ using Ants;
 
 public static class Pathfinding
 {
-    public static Location FindNextLocation(Location start, Location dest, IGameState state)
+    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid)
     {
-        List<Location> list = FindPath(start, dest, state);
+        if (start.Equals(dest))
+            return null;
+        if (!state.GetIsPassable(dest))
+            return null;
+        if (avoid.Contains(dest))
+            return null;
+
+        List<Location> list = FindPath(start, dest, state, avoid);
         if (list != null)
             return list[0];
         else
@@ -14,7 +21,7 @@ public static class Pathfinding
     }
 
     // Returns a list of tiles that form the shortest path between start and dest
-    public static List<Location> FindPath(Location start, Location dest, IGameState state)
+    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid)
     {
         List<PathfindNode> open = new List<PathfindNode>();
         List<PathfindNode> closed = new List<PathfindNode>();
@@ -53,7 +60,7 @@ public static class Pathfinding
             open.Remove(best);
             closed.Add(best);
 
-            if (Location.Equals(best.Position, dest)) // Destination added to closed list - almost done!
+            if (best.Position.Equals(dest)) // Destination added to closed list - almost done!
             {
                 last = best;
                 break;
@@ -63,14 +70,14 @@ public static class Pathfinding
             reachable = GetNeighbours(best.Position, state);
             foreach (Location next in reachable)
             {
-                if (!state.GetIsPassable(next)) // Check if tile is blocked
+                if (!state.GetIsPassable(next) || avoid.Contains(next)) // Check if tile is blocked
                     continue;
 
                 // Check if tile is not in closed list already
                 bool cont = false;
                 foreach (PathfindNode n in closed)
                 {
-                    if (Location.Equals(n.Position, next))
+                    if (n.Position.Equals(next))
                     {
                         cont = true;
                         break;
@@ -84,7 +91,7 @@ public static class Pathfinding
                 PathfindNode inOpen = null;
                 foreach (PathfindNode n in open)
                 {
-                    if (Location.Equals(n.Position, next))
+                    if (n.Position.Equals(next))
                     {
                         inOpen = n;
                         break;
@@ -104,7 +111,7 @@ public static class Pathfinding
                 }
             }
         }
-        if (last == null || last == first)//(!Location.Equals(last.Position, dest))
+        if (last == null)//(!Location.Equals(last.Position, dest))
             return null;
         // Trace the route from destination to start (using each node's parent property)
         List<PathfindNode> route = new List<PathfindNode>();
@@ -128,10 +135,8 @@ public static class Pathfinding
     static List<Location> GetNeighbours(Location loc, IGameState state)
     {
         List<Location> neighbours = new List<Location>();
-        neighbours.Add(state.GetDestination(loc, Direction.North));
-        neighbours.Add(state.GetDestination(loc, Direction.South));
-        neighbours.Add(state.GetDestination(loc, Direction.East));
-        neighbours.Add(state.GetDestination(loc, Direction.West));
+        for (int i = 0; i < 4; i++)
+            neighbours.Add(state.GetDestination(loc, (Direction)i));
         return neighbours;
     }
 }
