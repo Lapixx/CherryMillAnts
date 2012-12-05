@@ -4,7 +4,7 @@ using Ants;
 
 public static class Pathfinding
 {
-    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid)
+    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid, int maxDepth = int.MaxValue)
     {
         if (start.Equals(dest))
             return null;
@@ -13,7 +13,7 @@ public static class Pathfinding
         if (avoid.Contains(dest))
             return null;
 
-        List<Location> list = FindPath(start, dest, state, avoid);
+        List<Location> list = FindPath(start, dest, state, avoid, maxDepth);
         if (list != null)
             return list[0];
         else
@@ -21,13 +21,23 @@ public static class Pathfinding
     }
 
     // Returns a list of tiles that form the shortest path between start and dest
-    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid)
+    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid, int maxDepth = int.MaxValue)
     {
+        int currentDepth = 0;
+        /*
         List<PathfindNode> open = new List<PathfindNode>();
         List<PathfindNode> closed = new List<PathfindNode>();
+        */
+
+        //LinkedList<PathfindNode> open = new LinkedList<PathfindNode>();
+        //HashSet<PathfindNode> open = new HashSet<PathfindNode>();
+        HashSet<string> closed = new HashSet<string>();
+        Dictionary<string, PathfindNode> locToNode = new Dictionary<string, PathfindNode>();
+        SortedSet<PathfindNode> open = new SortedSet<PathfindNode>();
+
         List<Location> reachable;
         // Starting node
-        PathfindNode first = new PathfindNode(start, null, dest, state);
+        
         /*
         closed.Add(first);
 
@@ -39,13 +49,16 @@ public static class Pathfinding
                 open.Add(new PathfindNode(next, first, dest));
         }
         */
+        PathfindNode first = new PathfindNode(start, null, dest, state);
         open.Add(first);
+        locToNode.Add(MyBot.LocationToKey(first.Position), first);
+
         // Repeat until the destination node is reached
         PathfindNode last = null;
         while (open.Count > 0)
         {
-
             // Search the best available tile (lowest cost to reach from start, closest to dest)
+            /*
             PathfindNode best = null;
             foreach (PathfindNode next in open)
             {
@@ -55,10 +68,21 @@ public static class Pathfinding
                 if (next.F < best.F)
                     best = next;
             }
+            */
+
+            PathfindNode best = open.Min;
+
+            currentDepth++;
+            if (currentDepth > maxDepth)
+            {
+                last = best;
+                break;
+            }
 
             // Move to closed list
             open.Remove(best);
-            closed.Add(best);
+            locToNode.Remove(MyBot.LocationToKey(best.Position));
+            closed.Add(MyBot.LocationToKey(best.Position));
 
             if (best.Position.Equals(dest)) // Destination added to closed list - almost done!
             {
@@ -68,49 +92,32 @@ public static class Pathfinding
 
             // Find tiles adjacent to this tile
             reachable = GetNeighbours(best.Position, state);
+            string lid;
+            PathfindNode pfn;
             foreach (Location next in reachable)
             {
                 if (!state.GetIsPassable(next) || avoid.Contains(next)) // Check if tile is blocked
                     continue;
 
-                // Check if tile is not in closed list already
-                bool cont = false;
-                foreach (PathfindNode n in closed)
-                {
-                    if (n.Position.Equals(next))
-                    {
-                        cont = true;
-                        break;
-                    }
-                }
+                lid = MyBot.LocationToKey(next);
 
-                if (cont)
+                if (closed.Contains(lid))
                     continue;
 
-                // Check if tile is in open list already
-                PathfindNode inOpen = null;
-                foreach (PathfindNode n in open)
+                if(locToNode.ContainsKey(lid))
                 {
-                    if (n.Position.Equals(next))
-                    {
-                        inOpen = n;
-                        break;
-                    }
+                    pfn = locToNode[lid];
+                    if (best.G + 1 < pfn.G)
+                        pfn.Parent = best; 
                 }
-
-                if (inOpen != null) // Update parent if this is a faster route
-                {
-                    if (best.G + 1 < inOpen.G)
-                    {
-                        inOpen.Parent = best;
-                    }
-                }
-                else // Add tile to open list
-                {
-                    open.Add(new PathfindNode(next, best, dest, state));
-                }
+                else{
+                    pfn = new PathfindNode(next, best, dest, state);
+                    open.Add(pfn);
+                    locToNode.Add(lid, pfn);
+                }                     
             }
         }
+
         if (last == null)//(!Location.Equals(last.Position, dest))
             return null;
         // Trace the route from destination to start (using each node's parent property)
@@ -141,7 +148,7 @@ public static class Pathfinding
     }
 }
 
-class PathfindNode
+class PathfindNode : IComparable<PathfindNode>
 {
     public Location Position;
     public PathfindNode Parent;
@@ -172,5 +179,14 @@ class PathfindNode
         this.Position = position;
         this.Parent = parent;
         this.H = state.GetDistance(position, destination);
+    }
+
+    public int CompareTo(PathfindNode pfn2)
+    {
+        if (F < pfn2.F)
+            return -1;
+        else if (pfn2.F < F)
+            return 1;
+        return 0;
     }
 }

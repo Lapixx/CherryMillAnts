@@ -14,16 +14,20 @@ namespace Ants
         float[,] heatMap;
         Location[,] heatMapCentre;
         int heatMapGridSize;
-        int foodRadius;
-        int raidRadius;
+        int foodRadius = 0;
+        int raidRadius = 0;
+        int currentStep = 0;
 
 		// DoTurn is run once per turn
 		public override void DoTurn (IGameState state)
         {
             //Console.WriteLine("{0} ants", state.MyAnts.Count);
 
+            currentStep++;
+
             if (myHills == null)
             {
+                ClearLogShit("quadSelection.log");
                 random = new Random();
                 currentTasks = new Dictionary<string, CurrentTask>();
                 nextTasks = new Dictionary<string, CurrentTask>();
@@ -38,11 +42,16 @@ namespace Ants
                             heatMapCentre[y, x] = new Location(y * heatMapGridSize, x * heatMapGridSize);
 
                 foreach (Location h in myHills)
+                {
                     UpdateHeatMapCell(h, -5f);
+                    LogShit("quadSelection.log", "HILL " + (h.Row / heatMapGridSize) + ", " + (h.Col / heatMapGridSize));
+                }
             }
 
+            /*
             foodRadius = Math.Max(3, 10 - state.MyAnts.Count / 2);
             raidRadius = Math.Max(3, Math.Min(20, state.MyAnts.Count / 6));
+            */
 
             currentTasks = nextTasks;
             nextTasks = new Dictionary<string, CurrentTask>();
@@ -102,7 +111,7 @@ namespace Ants
 
                 if (task.task == Task.Dinner)
                 {
-                    if (task.food.Equals(a) || state[task.food.Row, task.food.Col] != Tile.Food)
+                    if (task.food.Equals(a) || state[task.food.Row, task.food.Col] != Tile.Food || state.GetDistance(a, task.food) > foodRadius)
                         task.task = Task.Roaming;
                 }
                 
@@ -130,12 +139,16 @@ namespace Ants
                         }
                     }
                      */
-
-                    while (task.roam.Equals(a) || !state.GetIsPassable(task.roam))
+                    if (task.roam.Equals(a) || !state.GetIsPassable(task.roam))
                     {
                         UpdateHeatMapCell(task.roam, -5f);
                         task.roam = GetNewDestination(a, state);
-                    }
+                        if (task.roam == null)
+                        {
+                            nextTasks.Add(key, task);
+                            continue;
+                        }
+                    }               
                 }
 
                 List<Location> avoid = new List<Location>();
@@ -160,7 +173,10 @@ namespace Ants
                 Location next = Pathfinding.FindNextLocation(a, tgt, state, avoid);
                 Direction dir;
                 if (next == null)
+                {
+                    nextTasks.Add(key, task);
                     continue;
+                }
                 //if (a.Equals(next))
                 //    continue;
                 dir = ((List<Direction>)state.GetDirections(a, next))[0];
@@ -233,9 +249,11 @@ namespace Ants
 
         public Location GetNewDestination(Location loc, IGameState state)
         {
-            Location pref = loc, l;
-            float d;
+            Location pref = null, l;
+            float d, d2;
             float maxHeat = float.MinValue;
+            int qx = -1, qy = -1;
+            float qh = -1000f, qd = -1f;
             for(int y = 0; y < heatMap.GetLength(0); y++)
             {
                 for(int x = 0; x < heatMap.GetLength(1); x++)
@@ -255,20 +273,47 @@ namespace Ants
                     if (l == null)
                         continue;
 
-                    d = state.GetDistance(loc, l);
-                    if (d < heatMapGridSize)
+                    d = state.GetDistance(loc, l) / (float)heatMapGridSize;
+                    if (d < 1)
                         continue;
-                    d = heatMap[y, x] - (d / heatMapGridSize);
-                    if (d > maxHeat)
+                    d2 = heatMap[y, x] - d;
+                    if (d2 > maxHeat)
                     {
-                        maxHeat = d;
+                        maxHeat = d2;
                         pref = l;
+                        qx = x;
+                        qy = y;
+                        qh = heatMap[y, x];
+                        qd = d;
                     }
                 }
             }
-            UpdateHeatMapCell(pref, -1f);
+            //pref = new Location(46, 66);
+            if (pref != null)
+            {
+                LogShit("quadSelection.log", "[STEP " + currentStep.ToString() + "] GOTO " + qy.ToString() + ", " + qx.ToString() + " (heat = " + qh.ToString() + ", dist = " + qd.ToString() + ")");
+                UpdateHeatMapCell(pref, -1f);
+            }
             return pref;
         }
+
+        public void LogShit(string fname, string msg)
+        {
+            FileStream fs = new FileStream(fname, System.IO.FileMode.Append, System.IO.FileAccess.Write);
+            StreamWriter sw = new StreamWriter(fs);
+            sw.WriteLine(msg);
+            sw.Close();
+            fs.Close();
+        }
+        public void ClearLogShit(string fname)
+        {
+            FileStream fs = new FileStream(fname, System.IO.FileMode.Create, System.IO.FileAccess.Write);
+            StreamWriter sw = new StreamWriter(fs);
+            sw.Write(" ");
+            sw.Close();
+            fs.Close();
+        }
+
 
         public Location GetNewRandomDestination(Location loc, IGameState state)
         {
@@ -285,6 +330,7 @@ namespace Ants
 
         public Location GetNextCellCentre(Location centre, IGameState state)
         {
+            //return null;
             Location newCentre = new Location(centre.Row, centre.Col + 1);
             if (newCentre.Col % heatMapGridSize == 0)
                 newCentre = new Location(centre.Row + 1, centre.Col + 1 - heatMapGridSize);
@@ -308,7 +354,7 @@ namespace Ants
             heatMap[loc.Row / heatMapGridSize, loc.Col / heatMapGridSize] = 0;
         }
 
-        public string LocationToKey(Location location)
+        public static string LocationToKey(Location location)
         {
             return location.Row + "," + location.Col;
         }
