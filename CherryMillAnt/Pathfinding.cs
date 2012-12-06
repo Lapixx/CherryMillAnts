@@ -33,7 +33,7 @@ public static class Pathfinding
         //HashSet<PathfindNode> open = new HashSet<PathfindNode>();
         HashSet<string> closed = new HashSet<string>();
         Dictionary<string, PathfindNode> locToNode = new Dictionary<string, PathfindNode>();
-        SortedSet<PathfindNode> open = new SortedSet<PathfindNode>();
+        List<PathfindNode> open = new List<PathfindNode>();
 
         List<Location> reachable;
         // Starting node
@@ -58,7 +58,7 @@ public static class Pathfinding
         while (open.Count > 0)
         {
             // Search the best available tile (lowest cost to reach from start, closest to dest)
-            /*
+            
             PathfindNode best = null;
             foreach (PathfindNode next in open)
             {
@@ -68,9 +68,9 @@ public static class Pathfinding
                 if (next.F < best.F)
                     best = next;
             }
-            */
+            
 
-            PathfindNode best = open.Min;
+            //PathfindNode best = open.Min;
 
             currentDepth++;
             if (currentDepth > maxDepth)

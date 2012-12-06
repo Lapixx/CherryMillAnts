@@ -48,10 +48,8 @@ namespace Ants
                 }
             }
 
-            /*
             foodRadius = Math.Max(3, 10 - state.MyAnts.Count / 2);
             raidRadius = Math.Max(3, Math.Min(20, state.MyAnts.Count / 6));
-            */
 
             currentTasks = nextTasks;
             nextTasks = new Dictionary<string, CurrentTask>();
@@ -151,7 +149,7 @@ namespace Ants
                     }               
                 }
 
-                List<Location> avoid = new List<Location>();
+                List<Location> avoid = new List<Location>(myHills);
                 Location l;
                 for (int i = 0; i < 4; i++)
                 {
@@ -361,6 +359,10 @@ namespace Ants
 
 		public static void Main (string[] args)
         {
+            //#if DEBUG
+            //System.Diagnostics.Debugger.Launch();
+            //while (!System.Diagnostics.Debugger.IsAttached) { }
+            //#endif
             new Ants().PlayGame(new MyBot());
 		}
 	}
