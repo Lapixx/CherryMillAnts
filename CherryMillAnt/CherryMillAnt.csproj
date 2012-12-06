@@ -38,6 +38,7 @@
     <Compile Include="Bot.cs" />
     <Compile Include="Direction.cs" />
     <Compile Include="GameState.cs" />
+    <Compile Include="HeatMap.cs" />
     <Compile Include="IGameState.cs" />
     <Compile Include="Location.cs" />
     <Compile Include="MyBot.cs" />

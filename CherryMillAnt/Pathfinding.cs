@@ -4,7 +4,7 @@ using Ants;
 
 public static class Pathfinding
 {
-    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid, int maxDepth = int.MaxValue)
+    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid)
     {
         if (start.Equals(dest))
             return null;
@@ -13,7 +13,7 @@ public static class Pathfinding
         if (avoid.Contains(dest))
             return null;
 
-        List<Location> list = FindPath(start, dest, state, avoid, maxDepth);
+        List<Location> list = FindPath(start, dest, state, avoid);
         if (list != null)
             return list[0];
         else
@@ -21,9 +21,8 @@ public static class Pathfinding
     }
 
     // Returns a list of tiles that form the shortest path between start and dest
-    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid, int maxDepth = int.MaxValue)
+    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid)
     {
-        int currentDepth = 0;
         /*
         List<PathfindNode> open = new List<PathfindNode>();
         List<PathfindNode> closed = new List<PathfindNode>();
@@ -71,13 +70,6 @@ public static class Pathfinding
             
 
             //PathfindNode best = open.Min;
-
-            currentDepth++;
-            if (currentDepth > maxDepth)
-            {
-                last = best;
-                break;
-            }
 
             // Move to closed list
             open.Remove(best);
@@ -148,25 +140,27 @@ public static class Pathfinding
     }
 }
 
-class PathfindNode : IComparable<PathfindNode>
+class PathfindNode// : IComparable<PathfindNode>
 {
     public Location Position;
     public PathfindNode Parent;
 
-    public int H; // Estimated cost to reach destination
+    public float H; // Estimated cost to reach destination
 
-    public int G // Cost to reach node from start
+    public float E = 1; // Added costs
+
+    public float G // Cost to reach node from start
     {
         get
         {
             if (Parent == null)
                 return 0;
             else
-                return (Parent.G + 1);
+                return (Parent.G + E);
         }
     }
 
-    public int F // G + H
+    public float F // G + H
     {
         get
         {
@@ -181,12 +175,12 @@ class PathfindNode : IComparable<PathfindNode>
         this.H = state.GetDistance(position, destination);
     }
 
-    public int CompareTo(PathfindNode pfn2)
+    /*public int CompareTo(PathfindNode pfn2)
     {
         if (F < pfn2.F)
             return -1;
         else if (pfn2.F < F)
             return 1;
         return 0;
-    }
+    }*/
 }
