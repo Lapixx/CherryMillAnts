@@ -7,13 +7,15 @@ namespace Ants
 	class MyBot : Bot
     {
         Random random;
-        List<Location> myHills, theirHills;
+        List<Location> myHills, theirHills, yummies;
         int viewRadius;
         Dictionary<string, CurrentTask> currentTasks;
         Dictionary<string, CurrentTask> nextTasks;
+        Dictionary<string, List<CurrentTask>> conflictingTasks;
         HeatMap heatMap;
         int foodRadius = 0;
         int raidRadius = 0;
+        int arrivalRadius = 3;
         int currentStep = 0;
 
 		// DoTurn is run once per turn
@@ -25,12 +27,12 @@ namespace Ants
 
             if (myHills == null)
             {
-                ClearLogShit("quadSelection.log");
                 random = new Random();
                 currentTasks = new Dictionary<string, CurrentTask>();
                 nextTasks = new Dictionary<string, CurrentTask>();
                 myHills = new List<Location>(state.MyHills);
                 theirHills = new List<Location>();
+                yummies = new List<Location>();
                 viewRadius = (int)Math.Sqrt(state.ViewRadius2);
                 heatMap = new HeatMap(viewRadius, state);
                 
@@ -47,13 +49,16 @@ namespace Ants
             foreach (Location e in state.EnemyHills)
             {
                 if (!theirHills.Contains(e))
+                {
                     theirHills.Add(e);
+                    heatMap.SetCellCentre(e);
+                }
                 heatMap.ResetCell(e);
                 heatMap.UpdateCell(e, 15f);
             }
 
             heatMap.UpdateAllCells(0.2f, 10);
-                
+
             foreach (Ant a in state.MyAnts)
             {
                 if (state.TimeRemaining < 10) break;
@@ -66,6 +71,7 @@ namespace Ants
                     currentTasks.Add(key, new CurrentTask(Task.Roaming, a));
 
                 CurrentTask task = currentTasks[key];
+                task.from = a;
 
                 if (task.task != Task.Terminating)
                 {
@@ -97,7 +103,10 @@ namespace Ants
                 if (task.task == Task.Dinner)
                 {
                     if (task.food.Equals(a) || state[task.food.Row, task.food.Col] != Tile.Food || state.GetDistance(a, task.food) > foodRadius)
+                    {
                         task.task = Task.Roaming;
+                        yummies.Remove(task.food);
+                    }
                 }
                 
                 if (task.task == Task.Roaming)
@@ -108,6 +117,7 @@ namespace Ants
                     {
                         task.food = f;
                         task.task = Task.Dinner;
+                        yummies.Add(f);
                     }
                     /*
                     for (int y = -foodRadius; y < foodRadius; y++)
@@ -124,13 +134,13 @@ namespace Ants
                         }
                     }
                      */
-                    if (task.roam.Equals(a) || !state.GetIsPassable(task.roam))
+                    if (task.roam.Equals(a) || !state.GetIsPassable(task.roam) || state.GetDistance(a, task.roam) <= arrivalRadius)
                     {
                         heatMap.UpdateCell(task.roam, -5f);
                         task.roam = GetNewDestination(a, state);
                         if (task.roam == null)
                         {
-                            nextTasks.Add(key, task);
+                            task.to = task.from;
                             continue;
                         }
                     }               
@@ -138,9 +148,8 @@ namespace Ants
 
                 List<Location> avoid = new List<Location>(myHills);
                 //avoid.AddRange(state.MyAnts);
-                
+                /*
                 Location l;
-
                 for (int i = 0; i < 4; i++)
                 {
                     l = state.GetDestination(a, (Direction)i);
@@ -149,7 +158,8 @@ namespace Ants
                         avoid.Add(l);
                     }
                 }
-                
+                */
+
                 Location tgt = null;
                 switch(task.task)
                 {
@@ -159,52 +169,133 @@ namespace Ants
                 }
 
                 Location next = Pathfinding.FindNextLocation(a, tgt, state, avoid);
-                Direction dir;
                 if (next == null)
                 {
-                    nextTasks.Add(key, task);
+                    task.to = task.from;
                     continue;
                 }
-                //if (a.Equals(next))
-                //    continue;
-                dir = ((List<Direction>)state.GetDirections(a, next))[0];
-                string key2 = LocationToKey(next);
-                if (!nextTasks.ContainsKey(key2) && !currentTasks.ContainsKey(key2))
-                {
-                    IssueOrder(a, dir);
-                    nextTasks.Add(key2, task);
-                    currentTasks.Remove(key);
-                }
-                else
-                {
-                    nextTasks.Add(key, task);
-                }
+                task.to = next;
             }
 
-            /*
-			// loop through all my ants and try to give them orders
-			foreach (Ant ant in state.MyAnts) {
-				
-				// try all the directions
-				foreach (Direction direction in Ants.Aim.Keys) {
+            conflictingTasks = new Dictionary<string, List<CurrentTask>>();
+            string key2;
+            foreach (CurrentTask task in currentTasks.Values)
+            {
+                task.resolved = false;
+                key2 = LocationToKey(task.to);
+                if (!conflictingTasks.ContainsKey(key2))
+                    conflictingTasks.Add(key2, new List<CurrentTask>());
+                conflictingTasks[key2].Add(task);
+            }
 
-					// GetDestination will wrap around the map properly
-					// and give us a new location
-					Location newLoc = state.GetDestination(ant, direction);
+            Dictionary<string, CurrentTask> currentTasksLoop = new Dictionary<string, CurrentTask>(currentTasks);
 
-					// GetIsPassable returns true if the location is land
-					if (state.GetIsPassable(newLoc)) {
-						IssueOrder(ant, direction);
-						// stop now, don't give 1 ant multiple orders
-						break;
-					}
-				}
-				
-				// check if we have time left to calculate more orders
-				if (state.TimeRemaining < 10) break;
-			}
-		*/
+            foreach (KeyValuePair<string, CurrentTask> kvp in currentTasksLoop)
+            {
+                CurrentTask task = kvp.Value;
+
+                if (!state.MyAnts.Contains(new Ant(task.from.Row, task.from.Col, state.MyAnts[0].Team)))
+                    continue;
+
+                if (task.resolved)
+                    continue;
+
+                ResolveConflict(task.from, null, task.from, state);
+            }
 		}
+
+        public bool ResolveConflict(Location loc, Location caller, Location origin, IGameState state)
+        {
+            CurrentTask task = currentTasks[LocationToKey(loc)];
+            task.resolving = true;
+            if (nextTasks.ContainsKey(LocationToKey(task.to))) // Destination taken
+            {
+                PerformMove(task, task.from, state);
+                task.resolving = false;
+                return false;
+            }
+            else if (!currentTasks.ContainsKey(LocationToKey(task.to))) // Destination free
+            {
+                PerformMove(task, task.to, state);
+                task.resolving = false;
+                return true;
+            }
+            else if (currentTasks[LocationToKey(loc)].to.Equals(caller)) // Ant at loc wants to loc of caller and vice versa
+            {
+                PerformMove(currentTasks[LocationToKey(caller)], loc, state, true);
+                //PerformMove(currentTasks[LocationToKey(caller)], loc, state, true);
+                currentTasks[LocationToKey(caller)] = task;
+                task.from = task.to;
+                task.resolving = false;
+                return false;
+            }
+            else if (task.to.Equals(origin) && caller != null) // Loop detected to original caller (possible)
+            {
+                PerformMove(task, task.to, state);
+                task.resolving = false;
+                return true;
+            }
+            else if (task.resolving) // Loop detected (futurally possible)
+            {
+                // Resolve directly?
+                task.resolving = false;
+                return false;
+            }
+            else if (ResolveConflict(task.to, loc, origin, state)) // Check if destination will be free
+            {
+                PerformMove(task, task.to, state);
+                task.resolving = false;
+                return true;
+            }
+            else
+            {
+                if (caller == null)
+                    PerformMove(task, task.from, state);
+                task.resolving = false;
+                return false;
+            }
+        }
+
+
+        public void PerformMove(CurrentTask task, Location to, IGameState state, bool warp = false)
+        {
+            if (!to.Equals(task.from) && !warp)
+                IssueOrder(task.from, ((List<Direction>)state.GetDirections(task.from, task.to))[0]);
+            task.resolved = true;
+            nextTasks.Add(LocationToKey(to), task);
+            currentTasks.Remove(LocationToKey(task.from));
+        }
+
+        /*
+        public bool ResolveConflict2(Location loc, Location caller, Location origin, IGameState state)
+        {
+            if (nextTasks.ContainsKey(LocationToKey(loc))) // Destination taken
+            {
+                return false;
+            }
+            else if (currentTasks[LocationToKey(loc)].to.Equals(caller)) // Ant at loc wants to loc of caller and vice versa
+            {
+                PerformMove(currentTasks[LocationToKey(loc)], caller, state, true);
+                PerformMove(currentTasks[LocationToKey(caller)], loc, state, true);
+                return true;
+            }
+            else if (loc.Equals(origin)) // Destination is origin ("circle" movement)
+            {
+                //PerformMove(currentTasks[LocationToKey(caller)], loc, state);
+                return true;
+            }
+            else if (ResolveConflict(currentTasks[LocationToKey(loc)].to, loc, origin, state)) // Destination needs resolving
+            {
+                //PerformMove(currentTasks[LocationToKey(caller)], loc, state);
+                return true;
+            }
+            else
+            {
+                PerformMove(currentTasks[LocationToKey(loc)], loc, state);
+                return false;
+            }
+        }
+         * */
 
         public Location SearchFood2(Location loc, IGameState state)
         {
@@ -256,7 +347,7 @@ namespace Ants
                     for (int j = 0; j < i; j++)
                     {
                         f = state.GetDestination(f, g);
-                        if (state[f.Row, f.Col] == Tile.Food)
+                        if (state[f.Row, f.Col] == Tile.Food && !yummies.Contains(f))
                             return f;
                     }
                     g = DirectionExtensions.Rotate(g, 1);
@@ -265,7 +356,7 @@ namespace Ants
                         for (int j = 0; j < i; j++)
                         {
                             f = state.GetDestination(f, g);
-                            if (state[f.Row, f.Col] == Tile.Food)
+                            if (state[f.Row, f.Col] == Tile.Food && !yummies.Contains(f))
                                 return f;
                         }
                     }
@@ -336,6 +427,9 @@ namespace Ants
         public Location food;
         public Location hill;
         public Task task;
+        public Location from, to;
+        public bool resolved;
+        public bool resolving = false;
 
         public CurrentTask(Task task, Location dest)
         {

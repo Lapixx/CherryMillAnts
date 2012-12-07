@@ -57,6 +57,11 @@ namespace Ants
                         heatMap[y, x] += add;
         }
 
+        public void SetCellCentre(Location loc)
+        {
+            heatMapCentre[loc.Row / heatMapGridSize, loc.Col / heatMapGridSize] = loc;
+        }
+
         public Location GetHotDestination(Location loc)
         {
             float d, d2;
@@ -84,7 +89,7 @@ namespace Ants
                     d = state.GetDistance(loc, l) / (float)heatMapGridSize;
                     if (d < 1)
                         continue;
-                    d2 = heatMap[y, x] - d;
+                    d2 = heatMap[y, x] - d * 1.5f;
                     if (d2 > maxHeat)
                     {
                         maxHeat = d2;
