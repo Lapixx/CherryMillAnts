@@ -7,7 +7,7 @@ namespace Ants
 	class MyBot : Bot
     {
         Random random;
-        List<Location> myHills, theirHills, yummies;
+        List<Location> myHills, theirHills, yummies, timRobbins, martinSheen;
         int viewRadius;
         Dictionary<string, CurrentTask> currentTasks;
         Dictionary<string, CurrentTask> nextTasks;
@@ -33,11 +33,32 @@ namespace Ants
                 myHills = new List<Location>(state.MyHills);
                 theirHills = new List<Location>();
                 yummies = new List<Location>();
+                timRobbins = new List<Location>();
+                martinSheen = new List<Location>();
                 viewRadius = (int)Math.Sqrt(state.ViewRadius2);
                 heatMap = new HeatMap(viewRadius, state);
-                
+
                 foreach (Location h in myHills)
+                {
                     heatMap.UpdateCell(h, -5f);
+
+                    Location tim;
+                    tim = h + new Location(-1, -1);
+                    if (state.GetIsPassable(tim))
+                        timRobbins.Add(tim);
+
+                    tim = h + new Location(-1, 1);
+                    if (state.GetIsPassable(tim))
+                        timRobbins.Add(tim);
+
+                    tim = h + new Location(1, -1);
+                    if (state.GetIsPassable(tim))
+                        timRobbins.Add(tim);
+
+                    tim = h + new Location(1, 1);
+                    if (state.GetIsPassable(tim))
+                        timRobbins.Add(tim);
+                }
             }
 
             foodRadius = Math.Max(3, 10 - state.MyAnts.Count / 2);
@@ -63,17 +84,42 @@ namespace Ants
             {
                 if (state.TimeRemaining < 10) break;
 
+                foreach (Location kill in state.DeadTiles)
+                {
+                    if (currentTasks.ContainsKey(LocationToKey(kill)))
+                    {
+                        CurrentTask guard = currentTasks[LocationToKey(kill)];
+                        if (guard.task == Task.Guaaard)
+                        {
+                            martinSheen.Remove(guard.roam);
+                            timRobbins.Add(guard.roam);
+                        }
+                    }
+                }
+
                 if(heatMap.GetCell(a) > 0.1f)
                     heatMap.UpdateCell(a, -0.1f);
 
                 string key = LocationToKey(a);
                 if (!currentTasks.ContainsKey(key))
-                    currentTasks.Add(key, new CurrentTask(Task.Roaming, a));
+                {
+                    if (state.MyAnts.Count / 8 > martinSheen.Count && timRobbins.Count > 0)
+                    {
+                        Location martin = timRobbins[timRobbins.Count-1];
+                        timRobbins.RemoveAt(timRobbins.Count-1);
+                        martinSheen.Add(martin);
+                        currentTasks.Add(key, new CurrentTask(Task.Guaaard, martin));
+                    }
+                    else
+                    {
+                        currentTasks.Add(key, new CurrentTask(Task.Roaming, a));
+                    }
+                }
 
                 CurrentTask task = currentTasks[key];
                 task.from = a;
 
-                if (task.task != Task.Terminating)
+                if (task.task != Task.Terminating && task.task != Task.Guaaard)
                 {
                     foreach (Location e in theirHills)
                     {
@@ -146,8 +192,10 @@ namespace Ants
                     }               
                 }
 
-                List<Location> avoid = new List<Location>(myHills);
-                //avoid.AddRange(state.MyAnts);
+                List<Location> avoid = new List<Location>();
+                avoid.AddRange(state.MyHills);
+                if(task.task != Task.Guaaard)
+                    avoid.AddRange(martinSheen);
                 /*
                 Location l;
                 for (int i = 0; i < 4; i++)
@@ -166,6 +214,7 @@ namespace Ants
                     case Task.Roaming: tgt = task.roam; break;
                     case Task.Dinner: tgt = task.food; break;
                     case Task.Terminating: tgt = task.hill; break;
+                    case Task.Guaaard: tgt = task.roam; break;
                 }
 
                 Location next = Pathfinding.FindNextLocation(a, tgt, state, avoid);
@@ -208,7 +257,11 @@ namespace Ants
         {
             CurrentTask task = currentTasks[LocationToKey(loc)];
             task.resolving = true;
-            if (nextTasks.ContainsKey(LocationToKey(task.to))) // Destination taken
+            if(loc.Equals(task.to)){
+                PerformMove(task, task.to, state);
+                return false;
+            }
+            else if (nextTasks.ContainsKey(LocationToKey(task.to))) // Destination taken
             {
                 PerformMove(task, task.from, state);
                 task.resolving = false;
@@ -419,7 +472,7 @@ namespace Ants
 		}
 	}
 
-    public enum Task { Roaming, Dinner, Terminating };
+    public enum Task { Roaming, Dinner, Terminating, Guaaard };
 
     public class CurrentTask
     {
