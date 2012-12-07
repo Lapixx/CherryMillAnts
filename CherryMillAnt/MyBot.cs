@@ -194,8 +194,9 @@ namespace Ants
 
                 List<Location> avoid = new List<Location>();
                 avoid.AddRange(state.MyHills);
-                if(task.task != Task.Guaaard)
-                    avoid.AddRange(martinSheen);
+                avoid.AddRange(martinSheen);
+                if (task.task == Task.Guaaard)
+                    avoid.Remove(task.roam);
                 /*
                 Location l;
                 for (int i = 0; i < 4; i++)
