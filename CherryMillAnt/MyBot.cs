@@ -218,15 +218,49 @@ namespace Ants
                     case Task.Guaaard: tgt = task.roam; break;
                 }
 
-                Location next = Pathfinding.FindNextLocation(a, tgt, state, avoid);
+                bool recalc = false;
+                if (task.route == null)
+                    recalc = true;
+                else
+                    foreach (Location l in task.route)
+                        if (!state.GetIsPassable(l))
+                        {
+                            recalc = true;
+                            break;
+                        }
+
+                /*
+                if (start.Equals(dest))
+                    return null;
+                if (!state.GetIsPassable(dest))
+                    return null;
+                if (avoid.Contains(dest))
+                    return null;
+                */
+
+                Location next = null;
+
+                if (!a.Equals(tgt) && state.GetIsPassable(tgt) && !avoid.Contains(tgt))
+                {
+                    task.route = Pathfinding.FindPath(a, tgt, state, avoid);
+                    if (task.route != null)
+                        next = task.route[0];
+                }
+
+                //Location next = Pathfinding.FindNextLocation(a, tgt, state, avoid);
+
                 if (next == null)
                 {
                     task.to = task.from;
                     continue;
                 }
-                task.to = next;
+                else
+                {
+                    task.to = next;
+                }
             }
 
+            /*
             conflictingTasks = new Dictionary<string, List<CurrentTask>>();
             string key2;
             foreach (CurrentTask task in currentTasks.Values)
@@ -237,6 +271,7 @@ namespace Ants
                     conflictingTasks.Add(key2, new List<CurrentTask>());
                 conflictingTasks[key2].Add(task);
             }
+            */
 
             Dictionary<string, CurrentTask> currentTasksLoop = new Dictionary<string, CurrentTask>(currentTasks);
 
@@ -480,10 +515,24 @@ namespace Ants
         public Location roam;
         public Location food;
         public Location hill;
-        public Task task;
+        private Task _task;
         public Location from, to;
         public bool resolved;
         public bool resolving = false;
+        public List<Location> route;
+
+        public Task task
+        {
+            get
+            {
+                return _task;
+            }
+            set
+            {
+                route = null;
+                _task = value;
+            }
+        }
 
         public CurrentTask(Task task, Location dest)
         {

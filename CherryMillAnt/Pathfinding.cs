@@ -56,6 +56,8 @@ public static class Pathfinding
         PathfindNode last = null;
         while (open.Count > 0)
         {
+            if (state.TimeRemaining < 10) return null;
+
             // Search the best available tile (lowest cost to reach from start, closest to dest)
             
             PathfindNode best = null;
