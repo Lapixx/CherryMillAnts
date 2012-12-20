@@ -40,6 +40,7 @@
     <Compile Include="GameState.cs" />
     <Compile Include="HeatMap.cs" />
     <Compile Include="IGameState.cs" />
+    <Compile Include="InfluenceMap.cs" />
     <Compile Include="Location.cs" />
     <Compile Include="MyBot.cs" />
     <Compile Include="Pathfinding.cs" />

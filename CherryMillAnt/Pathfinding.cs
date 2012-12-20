@@ -4,16 +4,12 @@ using Ants;
 
 public static class Pathfinding
 {
-    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid)
+    public static Location FindNextLocation(Location start, Location dest, IGameState state, List<Location> avoid, LayeredInfluenceMap heat)
     {
-        if (start.Equals(dest))
-            return null;
-        if (!state.GetIsPassable(dest))
-            return null;
-        if (avoid.Contains(dest))
+        if (start.Equals(dest) || !state.GetIsPassable(dest) || avoid.Contains(dest))
             return null;
 
-        List<Location> list = FindPath(start, dest, state, avoid);
+        List<Location> list = FindPath(start, dest, state, avoid, heat);
         if (list != null)
             return list[0];
         else
@@ -21,34 +17,19 @@ public static class Pathfinding
     }
 
     // Returns a list of tiles that form the shortest path between start and dest
-    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid)
+    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid, LayeredInfluenceMap heat)
     {
-        /*
-        List<PathfindNode> open = new List<PathfindNode>();
-        List<PathfindNode> closed = new List<PathfindNode>();
-        */
 
-        //LinkedList<PathfindNode> open = new LinkedList<PathfindNode>();
-        //HashSet<PathfindNode> open = new HashSet<PathfindNode>();
+        if (start.Equals(dest) || !state.GetIsPassable(dest) || avoid.Contains(dest))
+            return null;
+
         HashSet<string> closed = new HashSet<string>();
         Dictionary<string, PathfindNode> locToNode = new Dictionary<string, PathfindNode>();
         List<PathfindNode> open = new List<PathfindNode>();
 
         List<Location> reachable;
-        // Starting node
         
-        /*
-        closed.Add(first);
-
-        // Add all reachable tiles to the Open list.
-
-        foreach (Location next in reachable)
-        {
-            if (state.GetIsPassable(next)) // Check if tile is free
-                open.Add(new PathfindNode(next, first, dest));
-        }
-        */
-        PathfindNode first = new PathfindNode(start, null, dest, state);
+        PathfindNode first = new PathfindNode(start, null, dest, state, heat[start]);
         open.Add(first);
         locToNode.Add(MyBot.LocationToKey(first.Position), first);
 
@@ -56,7 +37,11 @@ public static class Pathfinding
         PathfindNode last = null;
         while (open.Count > 0)
         {
-            if (state.TimeRemaining < 10) return null;
+            if (state.TimeRemaining < 10)
+            {
+                MyBot.LogShit("timeout.txt", "stop B - " + state.TimeRemaining);
+                return null;
+            }
 
             // Search the best available tile (lowest cost to reach from start, closest to dest)
             
@@ -70,7 +55,6 @@ public static class Pathfinding
                     best = next;
             }
             
-
             //PathfindNode best = open.Min;
 
             // Move to closed list
@@ -105,15 +89,16 @@ public static class Pathfinding
                         pfn.Parent = best; 
                 }
                 else{
-                    pfn = new PathfindNode(next, best, dest, state);
+                    pfn = new PathfindNode(next, best, dest, state, heat[next]);
                     open.Add(pfn);
                     locToNode.Add(lid, pfn);
                 }                     
             }
         }
 
-        if (last == null)//(!Location.Equals(last.Position, dest))
+        if (last == null)
             return null;
+
         // Trace the route from destination to start (using each node's parent property)
         List<PathfindNode> route = new List<PathfindNode>();
         while (last != first && last != null)
@@ -142,14 +127,14 @@ public static class Pathfinding
     }
 }
 
-class PathfindNode// : IComparable<PathfindNode>
+class PathfindNode
 {
     public Location Position;
     public PathfindNode Parent;
 
     public float H; // Estimated cost to reach destination
 
-    public float E = 1; // Added costs
+    public float E = 0; // Added costs
 
     public float G // Cost to reach node from start
     {
@@ -158,7 +143,7 @@ class PathfindNode// : IComparable<PathfindNode>
             if (Parent == null)
                 return 0;
             else
-                return (Parent.G + E);
+                return Parent.G + 1;
         }
     }
 
@@ -166,23 +151,15 @@ class PathfindNode// : IComparable<PathfindNode>
     {
         get
         {
-            return (G + H);
+            return (G + H + E);
         }
     }
 
-    public PathfindNode(Location position, PathfindNode parent, Location destination, IGameState state)
+    public PathfindNode(Location position, PathfindNode parent, Location destination, IGameState state, float heat)
     {
         this.Position = position;
         this.Parent = parent;
+        this.E = heat;
         this.H = state.GetDistance(position, destination);
     }
-
-    /*public int CompareTo(PathfindNode pfn2)
-    {
-        if (F < pfn2.F)
-            return -1;
-        else if (pfn2.F < F)
-            return 1;
-        return 0;
-    }*/
 }
