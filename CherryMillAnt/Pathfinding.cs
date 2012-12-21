@@ -16,10 +16,14 @@ public static class Pathfinding
             return null;
     }
 
-    // Returns a list of tiles that form the shortest path between start and dest
-    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid, LayeredInfluenceMap heat)
+    public static bool ReachableWithin(Location start, Location dest, IGameState state, int maxDepth)
     {
-
+        return FindPath(start, dest, state, new List<Location>(), new LayeredInfluenceMap(state), maxDepth) != null;
+    }
+    
+    // Returns a list of tiles that form the shortest path between start and dest
+    public static List<Location> FindPath(Location start, Location dest, IGameState state, List<Location> avoid, LayeredInfluenceMap heat = null, int maxDepth = int.MaxValue)
+    {
         if (start.Equals(dest) || !state.GetIsPassable(dest) || avoid.Contains(dest))
             return null;
 
@@ -54,6 +58,9 @@ public static class Pathfinding
                 if (next.F < best.F)
                     best = next;
             }
+
+            if (best.G > maxDepth)
+                return null;
             
             //PathfindNode best = open.Min;
 

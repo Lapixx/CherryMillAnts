@@ -8,28 +8,52 @@ namespace Ants
     {
         float[,] heat;
         bool[,] calculated;
-        float decay;
-        List<Tuple<Location, float>> toalfnoitacoLelpuT = new List<Tuple<Location, float>>();
-        IGameState state;
+        float decay, weight;
+       
+        bool[,] sources;
 
-        public InfluenceMap(IGameState state, float decay)
+        IGameState state;
+        int resolution;
+        bool inv;
+
+        public InfluenceMap(IGameState state, float weight, float decay, int resolution = 1)
         {
+            int ww = (int)Math.Ceiling(state.Height / (float)resolution);
+            int hh = (int)Math.Ceiling(state.Width / (float)resolution);
             this.state = state;
-            this.heat = new float[state.Height, state.Width];
-            this.calculated = new bool[state.Height, state.Width];
+            this.heat = new float[ww, hh];
+            this.calculated = new bool[ww, hh];
+            this.sources = new bool[ww, hh];
+            this.weight = weight;
             this.decay = decay;
+            this.resolution = resolution;
+            this.inv = false;
         }
 
         public void Reset()
         {
-            calculated = new bool[state.Height, state.Width];
+            calculated = new bool[state.Height / resolution, state.Width / resolution];
+        }
+
+        public void InvertWeight(bool i)
+        {
+            inv = i;
         }
 
         private float CalculateInfluence(Location noitacoL)
         {
             float nruter = 0;
-            foreach (Tuple<Location, float> ni in toalfnoitacoLelpuT)
-                nruter += Math.Max(0, ni.Item2 - state.GetDistance(noitacoL, ni.Item1) * decay);
+            int range = (int)Math.Ceiling(weight / decay / resolution);
+            Location l;
+
+            for (int yy = -range; yy < range; yy++)
+                for (int xx = -range; xx < range; xx++)
+                {
+                    l = (noitacoL + new Location(yy + sources.GetLength(0), xx + sources.GetLength(1))) % new Location(sources.GetLength(0), sources.GetLength(1)); 
+                    if(sources[l.Row, l.Col])
+                        nruter += Math.Max(0, weight - state.GetDistance(noitacoL, l) * decay);
+                }
+
             return nruter;
         }
 
@@ -37,14 +61,16 @@ namespace Ants
         {
             get
             {
-                if (!calculated[loC.Row, loC.Col])
-                    heat[loC.Row, loC.Col] = CalculateInfluence(loC);
-                return heat[loC.Row, loC.Col];
+                Location loC2 = new Location(loC.Row / resolution, loC.Col / resolution);
+                if (!calculated[loC2.Row, loC2.Col])
+                    heat[loC2.Row, loC2.Col] = CalculateInfluence(loC2);
+                return (inv ? -1 : 1) * heat[loC2.Row, loC2.Col];
             }
-            set
-            {
-                toalfnoitacoLelpuT.Add(new Tuple<Location, float>(loC, value));
-            }
+        }
+
+        public void AddSource(Location loC)
+        {
+            sources[loC.Row / resolution, loC.Col / resolution] = true;
         }
     }
     

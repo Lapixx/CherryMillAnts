@@ -21,6 +21,7 @@ namespace Ants
         int currentStep = 0;
         MasterPlan masterPlan;
         LayeredInfluenceMap influenceMaps;
+        int armySize = 500;
 
 		// DoTurn is run once per turn
 		public override void DoTurn (IGameState state)
@@ -43,9 +44,9 @@ namespace Ants
                     }
                 }
             }
-
-            AdjustThermostat(state);
+            
             Scheming(state);
+            AdjustThermostat(state);
 
             foreach (Ant a in state.MyAnts)
             {
@@ -57,9 +58,28 @@ namespace Ants
                 WalkThatWay(a, state);
             }
 
+            foreach (Ant tnA in state.MyAnts)
+            {
+
+                CurrentTask task;
+                if (!currentTasks.TryGetValue(LocationToKey(tnA), out task))
+                    continue;
+
+                if (task.resolved)
+                    continue;
+
+                if(!task.from.Equals(tnA))
+                    LogShit("aaaaaaaa.txt", "from!=from @ " + LocationToKey(tnA) + " >> from= " + LocationToKey(task.from));
+
+                ResolveConflict(task.from, null, task.from, state);
+                //ResolveConflict(tnA, null, tnA, state);
+            }
+            /*
             foreach (KeyValuePair<string, CurrentTask> kvp in new Dictionary<string, CurrentTask>(currentTasks))
             {
                 CurrentTask task = kvp.Value;
+
+                //if(!currentTasks
 
                 if (!state.MyAnts.Contains(new Ant(task.from.Row, task.from.Col, state.MyAnts[0].Team)) || task.resolved)
                 {
@@ -68,8 +88,10 @@ namespace Ants
 
                 ResolveConflict(task.from, null, task.from, state);
             }
+            */
 		}
-
+        
+        // Initialise at first step
         public void Init(IGameState state)
         {
             random = new Random();
@@ -84,8 +106,8 @@ namespace Ants
             heatMap = new HeatMap(viewRadius, state);
 
             influenceMaps = new LayeredInfluenceMap(state);
-            influenceMaps["Enemies"] = new InfluenceMap(state, 1);
-            influenceMaps["Walls"] = new InfluenceMap(state, 1);
+            influenceMaps["Enemies"] = new InfluenceMap(state, 4, 1);
+            influenceMaps["Friends"] = new InfluenceMap(state, 1, 1);
 
             foreach (Location h in myHills)
             {
@@ -110,13 +132,36 @@ namespace Ants
             }
         }
 
+        // Determine global strategy
         public void Scheming(IGameState state)
         {
-            masterPlan = MasterPlan.SCOUTANDEAT;
-            foodRadius = Math.Max(3, 10 - state.MyAnts.Count / 2);
-            raidRadius = Math.Max(3, Math.Min(20, state.MyAnts.Count / 6));
+            if (state.MyAnts.Count < 25)
+            {
+                masterPlan = MasterPlan.SCOUTANDEAT;
+                foodRadius = 10;
+                raidRadius = 2;
+            }
+            else if (state.EnemyAnts.Count > state.MyAnts.Count)
+            {
+                masterPlan = MasterPlan.YOU_SHALLNOT_PAAAASSSS;
+                foodRadius = 5;
+                raidRadius = 2;
+            }
+            else if (state.MyAnts.Count > state.EnemyAnts.Count * 1.5)
+            {
+                masterPlan = MasterPlan.WORLDDOMINATION;
+                foodRadius = 2;
+                raidRadius = 25;
+            }
+            else
+            {
+                masterPlan = MasterPlan.SCOUTANDEAT;
+                foodRadius = 10;
+                raidRadius = 2;
+            }
         }
 
+        // Update heat and influence maps
         public void AdjustThermostat(IGameState state)
         {
             influenceMaps.Reset();
@@ -125,28 +170,49 @@ namespace Ants
             {
                 if (!theirHills.Contains(e))
                 {
-                    theirHills.Add(e);
                     heatMap.SetCellCentre(e);
+                    theirHills.Add(e);
                 }
-                heatMap.ResetCell(e);
-                heatMap.UpdateCell(e, 15f);
             }
 
-            foreach (Location e in theirHills)
-                influenceMaps["Enemies"][e] = -5;
+            if (masterPlan == MasterPlan.WORLDDOMINATION)
+            {
+                foreach (Location e in theirHills)
+                {
+                    heatMap.ResetCell(e);
+                    heatMap.UpdateCell(e, 15f);
+                }
+            }
+            else if (masterPlan == MasterPlan.YOU_SHALLNOT_PAAAASSSS)
+            {
+                foreach (Location e in myHills)
+                {
+                    heatMap.SetCellCentre(e);
+                    heatMap.ResetCell(e);
+                    heatMap.UpdateCell(e, 15f);
+                }
+            }
 
             heatMap.UpdateAllCells(0.2f, 10);
 
             foreach (Ant tnA in state.EnemyAnts)
-                influenceMaps["Enemies"][tnA] = 2;
+                influenceMaps["Enemies"].AddSource(tnA);
+
+            foreach (Ant tnA in state.MyAnts)
+                influenceMaps["Friends"].AddSource(tnA);
+
             /*
             for (int x = 0; x < state.Width; x++ )
                 for(int y = 0; y < state.Height; y++)
                     if (state[y, x] == Tile.Water)
                         influenceMaps["Walls"][new Location(y, x)] = 2;
             */
+
+            influenceMaps["Enemies"].InvertWeight(masterPlan == MasterPlan.WORLDDOMINATION);
+            
         }
 
+        // Local planning (for individual ant)
         public void WalkThatWay(Ant a, IGameState state)
         {
             if (heatMap.GetCell(a) > 0.1f)
@@ -161,6 +227,10 @@ namespace Ants
                     timRobbins.RemoveAt(timRobbins.Count - 1);
                     martinSheen.Add(martin);
                     currentTasks.Add(key, new CurrentTask(Task.Guaaard, martin));
+                }
+                else if (state.MyAnts.Count >= armySize)
+                {
+                    return;
                 }
                 else
                 {
@@ -188,21 +258,21 @@ namespace Ants
 
             if (task.task == Task.Terminating)
             {
-                if (!theirHills.Contains(task.hill))
-                {
-                    task.task = Task.Roaming;
-                }
-                else if (task.hill.Equals(a))
+                if (task.hill.Equals(a))
                 {
                     theirHills.Remove(task.hill);
                     heatMap.ResetCell(task.hill);
+                }
+                if (!theirHills.Contains(task.hill))
+                {
                     task.task = Task.Roaming;
+                    task.roam = a;
                 }
             }
 
             if (task.task == Task.Dinner)
             {
-                if (task.food.Equals(a) || state[task.food.Row, task.food.Col] != Tile.Food || state.GetDistance(a, task.food) > foodRadius)
+                if (task.food.Equals(a) || (state[task.food.Row, task.food.Col] != Tile.Food && state.GetIsVisible(task.food)))
                 {
                     task.task = Task.Roaming;
                     yummies.Remove(task.food);
@@ -280,79 +350,89 @@ namespace Ants
             }
         }
 
+        // 2nd pass collision avoidance
         public bool ResolveConflict(Location loc, Location caller, Location origin, IGameState state)
         {
+            if (LocationToKey(loc) == "32,72")
+                LogShit("aaaaaaaa.txt", "Derp @ 32,72 in step " + currentStep);
+            if (!currentTasks.ContainsKey(LocationToKey(loc)))
+                LogShit("aaaaaaaa.txt", "loc = " + LocationToKey(loc) + "caller = " + LocationToKey(caller) + "origin = " + LocationToKey(origin));
             CurrentTask task = currentTasks[LocationToKey(loc)];
-            task.resolving = true;
+            task.resolving++;
             if(loc.Equals(task.to))
             {
                 LogShit("Shitjeweet.txt", "A");
                 PerformMove(task, task.to, state);
+                task.resolving = 0;
                 return false;
             }
             else if (nextTasks.ContainsKey(LocationToKey(task.to))) // Destination taken
             {
                 LogShit("Shitjeweet.txt", "B");
                 PerformMove(task, task.from, state);
-                task.resolving = false;
+                task.resolving = 0;
                 return false;
             }
             else if (!currentTasks.ContainsKey(LocationToKey(task.to))) // Destination free
             {
                 LogShit("Shitjeweet.txt", "C");
                 PerformMove(task, task.to, state);
-                task.resolving = false;
+                task.resolving = 0;
                 return true;
             }
             else if (currentTasks[LocationToKey(loc)].to.Equals(caller)) // Ant at loc wants to loc of caller and vice versa
             {
                 LogShit("Shitjeweet.txt", "D");
-                return false;
-                PerformMove(currentTasks[LocationToKey(caller)], loc, state, true, false);
-                PerformMove(currentTasks[LocationToKey(loc)], caller, state, true, false);
-                return false;
+                task.warp = true;
+                PerformMove(task, caller, state);
+                currentTasks[LocationToKey(caller)].warp = true;
+                task.resolving = 0;
+                return true;
             }
             else if (task.to.Equals(origin) && caller != null) // Loop detected to original caller (possible)
             {
                 LogShit("Shitjeweet.txt", "E");
                 PerformMove(task, task.to, state);
-                task.resolving = false;
+                task.resolving = 0;
                 return true;
             }
-            else if (task.resolving) // Loop detected (futurally possible)
+            else if (task.resolving > 1) // Loop detected (futurally possible)
             {
                 LogShit("Shitjeweet.txt", "F");
                 // Resolve directly?
-                task.resolving = false;
+                task.resolving = 0;
                 return false;
             }
             else if (ResolveConflict(task.to, loc, origin, state)) // Check if destination will be free
             {
                 LogShit("Shitjeweet.txt", "G");
+                bool notWarp = !task.warp;
                 PerformMove(task, task.to, state);
-                task.resolving = false;
-                return true;
+                task.resolving = 0;
+                return notWarp;
             }
             else
             {
                 LogShit("Shitjeweet.txt", "H");
                 if (caller == null)
                     PerformMove(task, task.from, state);
-                task.resolving = false;
+                task.resolving = 0;
                 return false;
             }
         }
 
-        public void PerformMove(CurrentTask task, Location to, IGameState state, bool warp = false, bool remove = true)
+        // Move ant
+        public void PerformMove(CurrentTask task, Location to, IGameState state)
         {
-            if (!to.Equals(task.from) && !warp)
+            if (!to.Equals(task.from) && !task.warp)
                 IssueOrder(task.from, ((List<Direction>)state.GetDirections(task.from, task.to))[0]);
+            task.warp = false;
             task.resolved = true;
             nextTasks.Add(LocationToKey(to), task);
-            if(remove)
-                currentTasks.Remove(LocationToKey(task.from));
+            currentTasks.Remove(LocationToKey(task.from));
         }
 
+        // Find nearest food tile in range
         public Location SearchFood(Location loc, IGameState state)
         {
             Location f = loc;
@@ -364,7 +444,7 @@ namespace Ants
                     for (int j = 0; j < i; j++)
                     {
                         f = state.GetDestination(f, g);
-                        if (state[f.Row, f.Col] == Tile.Food && !yummies.Contains(f))
+                        if (state[f.Row, f.Col] == Tile.Food && !yummies.Contains(f) && Pathfinding.ReachableWithin(loc, f, state, foodRadius))
                             return f;
                     }
                     g = DirectionExtensions.Rotate(g, 1);
@@ -373,7 +453,7 @@ namespace Ants
                         for (int j = 0; j < i; j++)
                         {
                             f = state.GetDestination(f, g);
-                            if (state[f.Row, f.Col] == Tile.Food && !yummies.Contains(f))
+                            if (state[f.Row, f.Col] == Tile.Food && !yummies.Contains(f) && Pathfinding.ReachableWithin(loc, f, state, foodRadius))
                                 return f;
                         }
                     }
@@ -382,6 +462,7 @@ namespace Ants
             return null;
         }
 
+        // Find next roam destination
         public Location GetNewDestination(Location loc, IGameState state)
         {
             Location pref = heatMap.GetHotDestination(loc);
@@ -410,6 +491,8 @@ namespace Ants
 
         public static string LocationToKey(Location location)
         {
+            if (location == null)
+                return "?,?";
             return location.Row + "," + location.Col;
         }
 
@@ -431,8 +514,9 @@ namespace Ants
         private Task _task;
         public Location from, to;
         public bool resolved;
-        public bool resolving = false;
+        public byte resolving = 0;
         public List<Location> route;
+        public bool warp = false;
 
         public Task task
         {
